@@ -1,0 +1,6 @@
+{
+  "name": "Claude Context Shift",
+  "description": "A Chrome extension and server backend to extract and summarize chat history for seamless LLM continuation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
