@@ -176,7 +176,11 @@ Your first task is to deeply analyze the provided chat transcript below and cons
   zip.addFile('popup.html', Buffer.from(popupHtml));
   zip.addFile('popup.js', Buffer.from(popupJs));
 
-  const outPath = path.resolve(process.cwd(), 'context-shift-extension-v1.zip');
+  const publicDir = path.resolve(process.cwd(), 'public');
+  if (!fs.existsSync(publicDir)) {
+    fs.mkdirSync(publicDir);
+  }
+  const outPath = path.resolve(publicDir, 'context-shift-extension-v1.zip');
   zip.writeZip(outPath);
   console.log(`Successfully built extension to ${outPath}`);
   console.log("Ready for Chrome Web Store upload!");

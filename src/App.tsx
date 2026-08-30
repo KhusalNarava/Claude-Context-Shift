@@ -131,7 +131,7 @@ Your first task is to deeply analyze the provided chat transcript below and cons
           <div className="pt-4 space-y-4">
             <div className="flex flex-wrap items-center gap-3">
               <a 
-                href="/api/download-extension"
+                href="/context-shift-extension-v1.zip"
                 className="inline-flex items-center gap-2 px-6 py-3 bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 rounded-lg font-medium hover:bg-neutral-800 dark:hover:bg-neutral-200 transition-colors focus:ring-4 focus:ring-neutral-200 dark:focus:ring-neutral-800"
               >
                 <Download className="w-5 h-5" />
