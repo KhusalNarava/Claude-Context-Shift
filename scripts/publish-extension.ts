@@ -33,21 +33,36 @@ async function buildExtension() {
     .secondary-btn:hover { background: #e5e7eb; opacity: 1; }
     #status { margin-top: 8px; margin-bottom: 12px; font-size: 13px; color: #4b5563; line-height: 1.4; text-align: center; }
     #results { display: none; margin-top: 12px; }
-    textarea { width: 100%; height: 150px; padding: 8px; box-sizing: border-box; font-family: monospace; font-size: 12px; border: 1px solid #d1d5db; border-radius: 6px; resize: none; margin-bottom: 12px; }
+    
+    label { font-size: 12px; font-weight: 600; color: #374151; display: block; margin-bottom: 6px; margin-top: 16px; }
+    textarea { width: 100%; padding: 8px; box-sizing: border-box; font-family: monospace; font-size: 11px; border: 1px solid #d1d5db; border-radius: 6px; resize: none; margin-bottom: 8px; }
+    #promptOutput { height: 70px; }
+    #chatOutput { height: 100px; }
+    
     .button-group { display: flex; gap: 8px; }
+    .section { background: #f9fafb; padding: 10px; border-radius: 8px; margin-bottom: 16px; border: 1px solid #e5e7eb; }
   </style>
 </head>
 <body>
   <h3>Claude Context Shift</h3>
-  <p>Extract the current chat and generate a detailed context markdown file for AI Studio or any LLM.</p>
+  <p>Extract chat history and get the migration prompt for your next AI.</p>
   <button id="captureBtn">Extract Chat Context</button>
   <div id="status"></div>
   
   <div id="results">
-    <textarea id="markdownOutput" readonly></textarea>
-    <div class="button-group">
-      <button id="copyBtn" class="secondary-btn">Copy Content</button>
-      <button id="downloadBtn">Download File</button>
+    <div class="section">
+      <label>1. Instructions for the new AI</label>
+      <textarea id="promptOutput" readonly></textarea>
+      <button id="copyPromptBtn" class="secondary-btn">Copy Prompt</button>
+    </div>
+    
+    <div class="section">
+      <label>2. The Chat Transcript (.txt)</label>
+      <textarea id="chatOutput" readonly></textarea>
+      <div class="button-group">
+        <button id="copyChatBtn" class="secondary-btn">Copy Chat</button>
+        <button id="downloadChatBtn">Download .txt</button>
+      </div>
     </div>
   </div>
   <script src="popup.js"></script>
@@ -56,13 +71,19 @@ async function buildExtension() {
 
   const popupJs = `
 document.addEventListener('DOMContentLoaded', () => {
-  let generatedMarkdown = '';
+  let extractedChat = '';
+  let migrationPrompt = '';
+  
   const captureBtn = document.getElementById('captureBtn');
   const status = document.getElementById('status');
   const resultsDiv = document.getElementById('results');
-  const markdownOutput = document.getElementById('markdownOutput');
-  const copyBtn = document.getElementById('copyBtn');
-  const downloadBtn = document.getElementById('downloadBtn');
+  
+  const promptOutput = document.getElementById('promptOutput');
+  const copyPromptBtn = document.getElementById('copyPromptBtn');
+  
+  const chatOutput = document.getElementById('chatOutput');
+  const copyChatBtn = document.getElementById('copyChatBtn');
+  const downloadChatBtn = document.getElementById('downloadChatBtn');
 
   captureBtn.addEventListener('click', async () => {
     captureBtn.disabled = true;
@@ -88,15 +109,33 @@ document.addEventListener('DOMContentLoaded', () => {
           
           let text = '';
           if (elements.length > 0) {
+            let formattedChat = [];
             const uniqueTexts = new Set();
+            
             elements.forEach(el => {
+               let role = '--- CLAUDE RESPONSE ---';
+               
+               if (
+                 el.getAttribute('data-is-user') === 'true' || 
+                 el.getAttribute('data-message-author') === 'user' || 
+                 el.classList.contains('font-user-message')
+               ) {
+                 role = '--- USER PROMPT ---';
+               } else if (el.classList.contains('prose')) {
+                 // If this .prose is inside a known wrapper we already selected, skip it to avoid duplication
+                 if (el.parentElement && el.parentElement.closest('[data-is-user], [data-message-author], .font-user-message, .font-claude-message')) {
+                   return;
+                 }
+               }
+
                const t = el.innerText.trim();
                // Filter out empty strings and sidebar noise
                if (t.length > 0 && t !== "Sessions you start will show up here" && !uniqueTexts.has(t)) {
                    uniqueTexts.add(t);
+                   formattedChat.push(role + '\\n\\n' + t);
                }
             });
-            text = Array.from(uniqueTexts).join('\\n\\n--- [Message Boundary] ---\\n\\n');
+            text = formattedChat.join('\\n\\n=========================================\\n\\n');
           } else {
             // Fallback: grab all text in the main area
             text = mainArea.innerText;
@@ -112,31 +151,27 @@ document.addEventListener('DOMContentLoaded', () => {
         throw new Error("Could not find any chat text on this page.");
       }
       
-      const fixedPrompt = \`# CONTEXT MIGRATION & CONTINUATION INSTRUCTIONS
+      migrationPrompt = \`I am migrating an active development session from another AI to you.
 
-You are an expert AI developer assistant. We are migrating an active development session from another AI to you.
+I will provide the raw chat transcript in my next message (or attached as a text file).
 
-Your first task is to deeply analyze the provided chat transcript below and construct a comprehensive "Working Memory" for this project.
+Your first task is to deeply analyze the transcript and construct a comprehensive "Working Memory" for this project.
 
 ## INSTRUCTIONS FOR YOU:
-1.  **Analyze**: Read through the entire transcript below carefully. Ignore any noise or duplicated UI text from the scraping process.
-2.  **Create Working Memory**: Based on the chat, create a structured summary of:
+1.  **Analyze**: Read through the provided transcript carefully. Ignore any UI noise.
+2.  **Create Working Memory**: Create a structured summary of:
     *   **Project Goals:** What are we ultimately trying to build?
     *   **Current State:** Where exactly did we leave off?
-    *   **Key Decisions & Architecture:** What technical choices have been made? What tools/frameworks are we using?
-    *   **Pending Tasks:** What was the immediate next step or unresolved issue when the chat ended?
-3.  **Acknowledge & Prepare**: Respond with your "Working Memory" summary to confirm you understand the context. Do NOT start writing code for the next step yet. Wait for my confirmation and my next specific instruction after you provide the summary.
-
----
-
-# RAW SCRAPED CHAT TRANSCRIPT:
-
-\${chatText}\`;
+    *   **Key Decisions:** What technical choices/frameworks are we using?
+    *   **Pending Tasks:** What is the immediate next step or unresolved issue?
+3.  **Acknowledge**: Respond ONLY with this "Working Memory" summary. Do NOT start writing code for the next step yet. Wait for my confirmation.\`;
       
-      generatedMarkdown = fixedPrompt;
-      markdownOutput.value = generatedMarkdown;
+      extractedChat = chatText;
+      
+      promptOutput.value = migrationPrompt;
+      chatOutput.value = extractedChat;
+      
       resultsDiv.style.display = 'block';
-      
       status.innerText = 'Success! Context extracted.';
       captureBtn.innerText = 'Extract Again';
       captureBtn.disabled = false;
@@ -148,23 +183,31 @@ Your first task is to deeply analyze the provided chat transcript below and cons
     }
   });
 
-  copyBtn.addEventListener('click', () => {
-    navigator.clipboard.writeText(generatedMarkdown).then(() => {
-      const originalText = copyBtn.innerText;
-      copyBtn.innerText = 'Copied!';
-      setTimeout(() => { copyBtn.innerText = originalText; }, 2000);
+  copyPromptBtn.addEventListener('click', () => {
+    navigator.clipboard.writeText(migrationPrompt).then(() => {
+      const originalText = copyPromptBtn.innerText;
+      copyPromptBtn.innerText = 'Copied!';
+      setTimeout(() => { copyPromptBtn.innerText = originalText; }, 2000);
+    });
+  });
+
+  copyChatBtn.addEventListener('click', () => {
+    navigator.clipboard.writeText(extractedChat).then(() => {
+      const originalText = copyChatBtn.innerText;
+      copyChatBtn.innerText = 'Copied!';
+      setTimeout(() => { copyChatBtn.innerText = originalText; }, 2000);
     }).catch(err => {
       status.innerText = 'Copy failed: ' + err.message;
     });
   });
 
-  downloadBtn.addEventListener('click', () => {
-    const blob = new Blob([generatedMarkdown], { type: 'text/markdown' });
+  downloadChatBtn.addEventListener('click', () => {
+    const blob = new Blob([extractedChat], { type: 'text/plain' });
     const reader = new FileReader();
     reader.onload = function() {
       chrome.downloads.download({
         url: reader.result,
-        filename: 'claude-chat-context.md',
+        filename: 'claude-chat-transcript.txt',
         saveAs: true
       });
     };
