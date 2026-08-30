@@ -80,25 +80,26 @@ document.addEventListener('DOMContentLoaded', () => {
       const results = await chrome.scripting.executeScript({
         target: { tabId: tab.id },
         func: () => {
-          // Find the main scrollable chat container
-          const chatContainer = document.querySelector('div.flex-1.overflow-y-auto') || document.body;
+          // Find the main content area (avoids the sidebar which caused the "Sessions you start" bug)
+          const mainArea = document.querySelector('main') || document.querySelector('.flex-1') || document.body;
           
-          // Grab all paragraphs and specific message divs to form the transcript
-          // Claude typically uses divs with specific fonts or Tailwind prose classes.
-          const elements = chatContainer.querySelectorAll('.font-user-message, .font-claude-message, .prose, [data-is-user], p');
+          // Grab message divs. Claude typically uses .prose for its own messages.
+          const elements = mainArea.querySelectorAll('.font-user-message, .font-claude-message, .prose, [data-is-user], [data-message-author]');
           
           let text = '';
           if (elements.length > 0) {
             const uniqueTexts = new Set();
             elements.forEach(el => {
                const t = el.innerText.trim();
-               if (t.length > 0 && !uniqueTexts.has(t)) {
+               // Filter out empty strings and sidebar noise
+               if (t.length > 0 && t !== "Sessions you start will show up here" && !uniqueTexts.has(t)) {
                    uniqueTexts.add(t);
                }
             });
             text = Array.from(uniqueTexts).join('\\n\\n--- [Message Boundary] ---\\n\\n');
           } else {
-            text = chatContainer.innerText;
+            // Fallback: grab all text in the main area
+            text = mainArea.innerText;
           }
           
           return text.substring(0, 500000); // Limit to ~500k chars to prevent memory issues
